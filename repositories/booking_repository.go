@@ -27,8 +27,9 @@ func (r *BookingRepository) CreateBooking(booking *entities.Booking, bookingDeta
 			seatIDs[i] = detail.SeatID
 		}
 
+		// Check for active booking details (not deleted) that conflict
 		err := tx.Joins("JOIN bookings ON booking_details.booking_id = bookings.id").
-			Where("booking_details.seat_id IN ? AND bookings.schedule_id = ? AND bookings.status NOT IN ?",
+			Where("booking_details.seat_id IN ? AND bookings.schedule_id = ? AND bookings.status NOT IN ? AND booking_details.deleted_at IS NULL",
 				seatIDs, booking.ScheduleID, []entities.BookingStatus{
 					entities.BookingStatusExpired,
 					entities.BookingStatusCancelled,
@@ -43,6 +44,18 @@ func (r *BookingRepository) CreateBooking(booking *entities.Booking, bookingDeta
 		if len(existingDetails) > 0 {
 			return errors.New("one or more seats are already booked")
 		}
+
+		// Double check seat availability
+		var bookedSeats []entities.Seat
+		err = tx.Where("id IN ? AND is_booked = ?", seatIDs, true).Find(&bookedSeats).Error
+		if err != nil {
+			return err
+		}
+
+		if len(bookedSeats) > 0 {
+			return errors.New("one or more seats are already booked")
+		}
+
 		// Create booking
 		if err := tx.Create(booking).Error; err != nil {
 			return err
@@ -178,10 +191,14 @@ func (r *BookingRepository) ExpireBookings() error {
 				seatIDs = append(seatIDs, detail.SeatID)
 			}
 		}
-
 		// Update booking status to expired
 		if err := tx.Model(&entities.Booking{}).Where("id IN ?", bookingIDs).
 			Update("status", entities.BookingStatusExpired).Error; err != nil {
+			return err
+		}
+
+		// Soft delete booking details to free up unique constraint
+		if err := tx.Where("booking_id IN ?", bookingIDs).Delete(&entities.BookingDetail{}).Error; err != nil {
 			return err
 		}
 
@@ -257,6 +274,11 @@ func (r *BookingRepository) FreeSeatsByBookingID(bookingID uint) error {
 		var seatIDs []uint
 		for _, detail := range bookingDetails {
 			seatIDs = append(seatIDs, detail.SeatID)
+		}
+
+		// Soft delete booking details (this will free up the unique constraint)
+		if err := tx.Where("booking_id = ?", bookingID).Delete(&entities.BookingDetail{}).Error; err != nil {
+			return err
 		}
 
 		// Free the seats

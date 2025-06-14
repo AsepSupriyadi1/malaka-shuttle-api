@@ -351,3 +351,58 @@ func (c *BookingController) DownloadPaymentProof(ctx *gin.Context) {
 	// Serve the file
 	ctx.File(filePath)
 }
+
+// DownloadReceipt generates and downloads booking receipt (for users)
+func (c *BookingController) DownloadReceipt(ctx *gin.Context) {
+	// Get booking ID from URL
+	bookingID, err := strconv.ParseUint(ctx.Param("id"), 10, 32)
+	if err != nil {
+		utils.ErrorResponse(ctx, http.StatusBadRequest, "Invalid booking ID", nil)
+		return
+	}
+
+	// Get user ID from JWT token
+	userID, exists := ctx.Get("user_id")
+	if !exists {
+		utils.ErrorResponse(ctx, http.StatusUnauthorized, "User not authenticated", nil)
+		return
+	}
+
+	// Check if user is staff (can access any receipt) or regular user (can only access own receipt)
+	userRole, _ := ctx.Get("user_role")
+	var userIDPtr *uint
+	if userRole != "staff" && userRole != "admin" {
+		uid := userID.(uint)
+		userIDPtr = &uid
+	}
+
+	// Generate receipt
+	receiptPath, err := c.bookingService.GenerateBookingReceipt(uint(bookingID), userIDPtr)
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			utils.ErrorResponse(ctx, http.StatusNotFound, err.Error(), nil)
+			return
+		}
+		if strings.Contains(err.Error(), "only be generated for successful") {
+			utils.ErrorResponse(ctx, http.StatusBadRequest, err.Error(), nil)
+			return
+		}
+		utils.ErrorResponse(ctx, http.StatusInternalServerError, "Failed to generate receipt", err.Error())
+		return
+	}
+
+	// Check if file exists
+	if _, err := os.Stat(receiptPath); os.IsNotExist(err) {
+		utils.ErrorResponse(ctx, http.StatusInternalServerError, "Receipt file not found", nil)
+		return
+	}
+
+	// Set headers for PDF download
+	ctx.Header("Content-Description", "File Transfer")
+	ctx.Header("Content-Transfer-Encoding", "binary")
+	ctx.Header("Content-Disposition", fmt.Sprintf("attachment; filename=malaka_shuttle_receipt_%d.pdf", bookingID))
+	ctx.Header("Content-Type", "application/pdf")
+
+	// Serve the file
+	ctx.File(receiptPath)
+}

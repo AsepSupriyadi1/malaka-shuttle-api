@@ -11,8 +11,8 @@ type Seat struct {
 	IsBooked   bool   `gorm:"type:boolean;default:false;not null"`
 
 	// Relations
-	Schedule      Schedule       `gorm:"foreignKey:ScheduleID"`
-	BookingDetail *BookingDetail `gorm:"foreignKey:SeatID"`
+	Schedule       Schedule        `gorm:"foreignKey:ScheduleID"`
+	BookingDetails []BookingDetail `gorm:"foreignKey:SeatID"` // One seat can have multiple booking details (history)
 }
 
 // TableName returns the table name for Seat

@@ -317,6 +317,45 @@ func (s *BookingService) GetPaymentByBookingID(bookingID uint) (*dto.PaymentResp
 	return response, nil
 }
 
+// GenerateBookingReceipt generates PDF receipt for a booking
+func (s *BookingService) GenerateBookingReceipt(bookingID uint, userID *uint) (string, error) {
+	// Get booking details
+	booking, err := s.bookingRepo.GetBookingByID(bookingID, userID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return "", errors.New("booking not found")
+		}
+		return "", err
+	}
+
+	// Only allow receipt generation for successful bookings
+	if booking.Status != entities.BookingStatusSuccess {
+		return "", errors.New("receipt can only be generated for successful bookings")
+	}
+
+	// Map to response DTO
+	bookingResponse := s.mapBookingToResponse(booking)
+
+	// Create receipts directory if not exists
+	receiptsDir := "uploads/receipts"
+	if err := os.MkdirAll(receiptsDir, 0755); err != nil {
+		return "", fmt.Errorf("failed to create receipts directory: %w", err)
+	}
+
+	// Generate filename
+	filename := fmt.Sprintf("receipt_%d_%d.pdf", bookingID, time.Now().Unix())
+	outputPath := filepath.Join(receiptsDir, filename)
+
+	// Generate PDF
+	pdfGenerator := utils.NewPDFReceiptGenerator()
+	err = pdfGenerator.GenerateBookingReceipt(bookingResponse, outputPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to generate PDF: %w", err)
+	}
+
+	return outputPath, nil
+}
+
 // Helper method to map booking entity to response DTO
 func (s *BookingService) mapBookingToResponse(booking *entities.Booking) *dto.BookingResponse {
 	response := &dto.BookingResponse{

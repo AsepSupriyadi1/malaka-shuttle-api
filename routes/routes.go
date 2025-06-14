@@ -51,14 +51,13 @@ func SetupRoutes(router *gin.Engine, db *gorm.DB) {
 			// Schedule routes for public access
 			protected.GET("/schedules/search", scheduleController.SearchSchedules)     // GET /api/public/schedules/search
 			protected.GET("/schedules/:id", scheduleController.GetScheduleByIDForUser) // GET /api/public/schedules/:id
-			protected.GET("/schedules/:id/seats", bookingController.GetAvailableSeats) // GET /api/protected/schedules/:id/seats
-
-			// Booking routes for authenticated users
+			protected.GET("/schedules/:id/seats", bookingController.GetAvailableSeats) // GET /api/protected/schedules/:id/seats			// Booking routes for authenticated users
 			bookings := protected.Group("/bookings")
 			{
 				bookings.POST("", bookingController.CreateBooking)                  // POST /api/protected/bookings
 				bookings.GET("", bookingController.GetUserBookings)                 // GET /api/protected/bookings
 				bookings.GET("/:id", bookingController.GetBookingByID)              // GET /api/protected/bookings/:id
+				bookings.GET("/:id/receipt", bookingController.DownloadReceipt)     // GET /api/protected/bookings/:id/receipt
 				bookings.POST("/:id/payment", bookingController.UploadPaymentProof) // POST /api/protected/bookings/:id/payment
 			}
 		}

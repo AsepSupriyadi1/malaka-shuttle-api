@@ -46,5 +46,17 @@ func CreateIndexes(db *gorm.DB) error { // Hapus IF NOT EXISTS - biarkan error j
 		}
 	}
 
+	// Add unique constraint for active booking details
+	// This ensures one seat can only be booked once in active bookings
+	if err := db.Exec(`
+		CREATE UNIQUE INDEX idx_booking_details_active_seat 
+		ON booking_details(seat_id) 
+		WHERE deleted_at IS NULL
+	`).Error; err != nil {
+		if !strings.Contains(err.Error(), "Duplicate key name") && !strings.Contains(err.Error(), "already exists") {
+			return err
+		}
+	}
+
 	return nil
 }
