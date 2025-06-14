@@ -96,7 +96,7 @@ func (c *BookingController) GetBookingByID(ctx *gin.Context) {
 		userIDPtr = &uid
 	}
 
-	booking, err := c.bookingService.GetBookingByID(uint(bookingID), userIDPtr)
+	booking, err := c.bookingService.GetBookingDetailByID(uint(bookingID), userIDPtr)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			utils.ErrorResponse(ctx, http.StatusNotFound, err.Error(), nil)
@@ -131,7 +131,7 @@ func (c *BookingController) GetUserBookings(ctx *gin.Context) {
 		}
 	}
 
-	bookings, err := c.bookingService.GetUserBookings(userID.(uint), params, statusFilter)
+	bookings, err := c.bookingService.GetUserBookingsList(userID.(uint), params, statusFilter)
 	if err != nil {
 		utils.ErrorResponse(ctx, http.StatusInternalServerError, "Failed to get bookings", err.Error())
 		return
@@ -155,7 +155,7 @@ func (c *BookingController) GetAllBookings(ctx *gin.Context) {
 		}
 	}
 
-	bookings, err := c.bookingService.GetAllBookings(params, statusFilter)
+	bookings, err := c.bookingService.GetAllBookingsList(params, statusFilter)
 	if err != nil {
 		utils.ErrorResponse(ctx, http.StatusInternalServerError, "Failed to get bookings", err.Error())
 		return

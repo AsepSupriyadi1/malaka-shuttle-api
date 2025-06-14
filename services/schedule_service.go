@@ -6,6 +6,7 @@ import (
 	"malakashuttle/dto"
 	"malakashuttle/entities"
 	"malakashuttle/repositories"
+	"malakashuttle/utils"
 	"time"
 )
 
@@ -196,38 +197,65 @@ func (s *ScheduleService) DeleteSchedule(id uint) error {
 }
 
 // GetAllSchedules - Get all schedules with pagination (Admin only)
-func (s *ScheduleService) GetAllSchedules(page, limit int) (*dto.ScheduleListResponse, error) {
+func (s *ScheduleService) GetAllSchedules(page, limit int) (*utils.PaginationResponse, error) {
+	// Create pagination params
+	params := utils.PaginationParams{
+		Page:   page,
+		Limit:  limit,
+		Offset: (page - 1) * limit,
+	}
+
 	// Set default values
-	if page <= 0 {
-		page = 1
+	if params.Page <= 0 {
+		params.Page = 1
 	}
-	if limit <= 0 {
-		limit = 10
+	if params.Limit <= 0 {
+		params.Limit = 10
 	}
-	if limit > 100 { // Batasi max limit
-		limit = 100
+	if params.Limit > 100 { // Batasi max limit
+		params.Limit = 100
 	}
-	schedules, totalCount, err := s.scheduleRepo.GetAllSchedules(page, limit)
+
+	// Recalculate offset after validation
+	params.Offset = (params.Page - 1) * params.Limit
+
+	schedules, totalCount, err := s.scheduleRepo.GetAllSchedules(params.Page, params.Limit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get schedules: %v", err)
 	}
 
-	response := dto.ToScheduleListResponse(schedules, page, limit, totalCount, true) // true untuk admin fields
+	// Convert to response format
+	var scheduleResponses []dto.ScheduleResponse
+	for _, schedule := range schedules {
+		scheduleResponses = append(scheduleResponses, dto.ToScheduleResponse(schedule, true)) // true untuk admin fields
+	}
+
+	response := utils.CreatePaginationResponse(scheduleResponses, totalCount, params)
 	return &response, nil
 }
 
 // SearchSchedules - Search schedules by origin, destination, and departure date (User)
-func (s *ScheduleService) SearchSchedules(req dto.ScheduleSearchRequest) (*dto.ScheduleListResponse, error) {
+func (s *ScheduleService) SearchSchedules(req dto.ScheduleSearchRequest) (*utils.PaginationResponse, error) {
+	// Create pagination params
+	params := utils.PaginationParams{
+		Page:  req.Page,
+		Limit: req.Limit,
+	}
+
 	// Set default pagination values
-	if req.Page <= 0 {
-		req.Page = 1
+	if params.Page <= 0 {
+		params.Page = 1
 	}
-	if req.Limit <= 0 {
-		req.Limit = 10
+	if params.Limit <= 0 {
+		params.Limit = 10
 	}
-	if req.Limit > 100 {
-		req.Limit = 100
+	if params.Limit > 100 {
+		params.Limit = 100
 	}
+
+	// Calculate offset
+	params.Offset = (params.Page - 1) * params.Limit
+
 	// Load timezone Indonesia (WIB)
 	loc, err := time.LoadLocation("Asia/Jakarta")
 	if err != nil {
@@ -245,13 +273,20 @@ func (s *ScheduleService) SearchSchedules(req dto.ScheduleSearchRequest) (*dto.S
 	if departureDate.Before(todayInLoc) {
 		return nil, errors.New("departure_date cannot be in the past")
 	}
+
 	// Search schedules
-	schedules, totalCount, err := s.scheduleRepo.SearchSchedules(req.Origin, req.Destination, departureDate, req.Page, req.Limit)
+	schedules, totalCount, err := s.scheduleRepo.SearchSchedules(req.Origin, req.Destination, departureDate, params.Page, params.Limit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to search schedules: %v", err)
 	}
 
-	response := dto.ToScheduleListResponse(schedules, req.Page, req.Limit, totalCount, false) // false untuk user fields
+	// Convert to response format
+	var scheduleResponses []dto.ScheduleResponse
+	for _, schedule := range schedules {
+		scheduleResponses = append(scheduleResponses, dto.ToScheduleResponse(schedule, false)) // false untuk user fields
+	}
+
+	response := utils.CreatePaginationResponse(scheduleResponses, totalCount, params)
 	return &response, nil
 }
 
@@ -263,5 +298,23 @@ func (s *ScheduleService) GetScheduleByID(id uint, isAdmin bool) (*dto.ScheduleR
 	}
 
 	response := dto.ToScheduleResponse(*schedule, isAdmin)
+	return &response, nil
+}
+
+// GetScheduleWithSeats - Get schedule by ID dengan detail kursi
+func (s *ScheduleService) GetScheduleWithSeats(id uint) (*dto.ScheduleWithSeatsResponse, error) {
+	// Get schedule data
+	schedule, err := s.scheduleRepo.GetScheduleByID(id)
+	if err != nil {
+		return nil, errors.New("schedule not found")
+	}
+
+	// Get seats for this schedule
+	seats, err := s.scheduleRepo.GetSeatsByScheduleID(id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get seats: %v", err)
+	}
+
+	response := dto.ToScheduleWithSeatsResponse(*schedule, seats)
 	return &response, nil
 }

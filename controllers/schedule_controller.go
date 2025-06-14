@@ -113,23 +113,23 @@ func (c *ScheduleController) SearchSchedules(ctx *gin.Context) {
 		utils.ErrorResponse(ctx, http.StatusBadRequest, "Invalid query parameters", err.Error())
 		return
 	}
-
 	schedules, err := c.scheduleService.SearchSchedules(req)
 	if err != nil {
 		utils.ErrorResponse(ctx, http.StatusBadRequest, "Failed to search schedules", err.Error())
 		return
 	}
 
-	if len(schedules.Results) == 0 {
+	// Check if results is empty by checking total count
+	if schedules.Total == 0 {
 		utils.SuccessResponse(ctx, http.StatusOK, "No schedules found for the given criteria", schedules)
 		return
 	}
 
-	message := fmt.Sprintf("Found %d schedule(s)", len(schedules.Results))
+	message := fmt.Sprintf("Found %d schedule(s)", schedules.Total)
 	utils.SuccessResponse(ctx, http.StatusOK, message, schedules)
 }
 
-// GetScheduleByID - Get schedule by ID (Admin)
+// GetScheduleByIDForUser - Get schedule by ID with seats detail (User)
 func (c *ScheduleController) GetScheduleByID(ctx *gin.Context) {
 	idParam := ctx.Param("id")
 	id, err := strconv.ParseUint(idParam, 10, 32)
@@ -138,29 +138,7 @@ func (c *ScheduleController) GetScheduleByID(ctx *gin.Context) {
 		return
 	}
 
-	schedule, err := c.scheduleService.GetScheduleByID(uint(id), true) // true untuk admin
-	if err != nil {
-		if err.Error() == "schedule not found" {
-			utils.ErrorResponse(ctx, http.StatusNotFound, "Schedule not found", nil)
-			return
-		}
-		utils.ErrorResponse(ctx, http.StatusInternalServerError, "Failed to get schedule", err.Error())
-		return
-	}
-
-	utils.SuccessResponse(ctx, http.StatusOK, "Schedule retrieved successfully", schedule)
-}
-
-// GetScheduleByIDForUser - Get schedule by ID (User)
-func (c *ScheduleController) GetScheduleByIDForUser(ctx *gin.Context) {
-	idParam := ctx.Param("id")
-	id, err := strconv.ParseUint(idParam, 10, 32)
-	if err != nil {
-		utils.ErrorResponse(ctx, http.StatusBadRequest, "Invalid schedule ID", nil)
-		return
-	}
-
-	schedule, err := c.scheduleService.GetScheduleByID(uint(id), false) // false untuk user
+	schedule, err := c.scheduleService.GetScheduleWithSeats(uint(id))
 	if err != nil {
 		if err.Error() == "schedule not found" {
 			utils.ErrorResponse(ctx, http.StatusNotFound, "Schedule not found", nil)

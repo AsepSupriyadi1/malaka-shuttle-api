@@ -192,6 +192,16 @@ func (r *ScheduleRepository) CheckRouteExists(routeID uint) (bool, error) {
 	return count > 0, err
 }
 
+// GetSeatsByScheduleID - Get all seats for a schedule
+func (r *ScheduleRepository) GetSeatsByScheduleID(scheduleID uint) ([]entities.Seat, error) {
+	var seats []entities.Seat
+	err := r.db.Where("schedule_id = ?", scheduleID).Order("seat_number").Find(&seats).Error
+	if err != nil {
+		return nil, err
+	}
+	return seats, nil
+}
+
 // generateSeatNumber - Generate seat number (A1, A2, B1, B2, ...)
 func generateSeatNumber(seatIndex int) string {
 	// Buat format seat number seperti A1, A2, A3, A4, B1, B2, dst

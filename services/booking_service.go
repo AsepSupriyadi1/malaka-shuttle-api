@@ -87,14 +87,13 @@ func (s *BookingService) CreateBooking(userID uint, req dto.CreateBookingRequest
 	if err != nil {
 		return nil, fmt.Errorf("failed to create booking: %w", err)
 	}
-
 	// Get created booking with relations
 	createdBooking, err := s.bookingRepo.GetBookingByID(booking.ID, &userID)
 	if err != nil {
 		return nil, err
 	}
 
-	return s.mapBookingToResponse(createdBooking), nil
+	return dto.NewBookingResponseFromEntity(createdBooking), nil
 }
 
 // GetBookingByID gets booking by ID
@@ -107,7 +106,20 @@ func (s *BookingService) GetBookingByID(id uint, userID *uint) (*dto.BookingResp
 		return nil, err
 	}
 
-	return s.mapBookingToResponse(booking), nil
+	return dto.NewBookingResponseFromEntity(booking), nil
+}
+
+// GetBookingDetailByID gets detailed booking by ID
+func (s *BookingService) GetBookingDetailByID(id uint, userID *uint) (*dto.BookingFullResponse, error) {
+	booking, err := s.bookingRepo.GetBookingByID(id, userID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("booking not found")
+		}
+		return nil, err
+	}
+
+	return dto.NewBookingFullResponseFromEntity(booking), nil
 }
 
 // GetUserBookings gets all bookings for a user
@@ -120,7 +132,24 @@ func (s *BookingService) GetUserBookings(userID uint, params utils.PaginationPar
 	// Map to response DTOs
 	data := make([]dto.BookingResponse, len(bookings))
 	for i, booking := range bookings {
-		data[i] = *s.mapBookingToResponse(&booking)
+		data[i] = *dto.NewBookingResponseFromEntity(&booking)
+	}
+
+	response := utils.CreatePaginationResponse(data, total, params)
+	return &response, nil
+}
+
+// GetUserBookingsList gets all bookings for a user with list view response format
+func (s *BookingService) GetUserBookingsList(userID uint, params utils.PaginationParams, status []entities.BookingStatus) (*utils.PaginationResponse, error) {
+	bookings, total, err := s.bookingRepo.GetBookingsByUserID(userID, params.Page, params.Limit, status)
+	if err != nil {
+		return nil, err
+	}
+
+	// Map to list response DTOs
+	data := make([]dto.BookingListResponse, len(bookings))
+	for i, booking := range bookings {
+		data[i] = *dto.NewBookingListResponseFromEntity(&booking)
 	}
 
 	response := utils.CreatePaginationResponse(data, total, params)
@@ -137,7 +166,24 @@ func (s *BookingService) GetAllBookings(params utils.PaginationParams, status []
 	// Map to response DTOs
 	data := make([]dto.BookingResponse, len(bookings))
 	for i, booking := range bookings {
-		data[i] = *s.mapBookingToResponse(&booking)
+		data[i] = *dto.NewBookingResponseFromEntity(&booking)
+	}
+
+	response := utils.CreatePaginationResponse(data, total, params)
+	return &response, nil
+}
+
+// GetAllBookingsList gets all bookings with list view response format
+func (s *BookingService) GetAllBookingsList(params utils.PaginationParams, status []entities.BookingStatus) (*utils.PaginationResponse, error) {
+	bookings, total, err := s.bookingRepo.GetAllBookings(params.Page, params.Limit, status)
+	if err != nil {
+		return nil, err
+	}
+
+	// Map to list response DTOs
+	data := make([]dto.BookingListResponse, len(bookings))
+	for i, booking := range bookings {
+		data[i] = *dto.NewBookingListResponseFromEntity(&booking)
 	}
 
 	response := utils.CreatePaginationResponse(data, total, params)
@@ -327,14 +373,13 @@ func (s *BookingService) GenerateBookingReceipt(bookingID uint, userID *uint) (s
 		}
 		return "", err
 	}
-
 	// Only allow receipt generation for successful bookings
 	if booking.Status != entities.BookingStatusSuccess {
 		return "", errors.New("receipt can only be generated for successful bookings")
 	}
 
 	// Map to response DTO
-	bookingResponse := s.mapBookingToResponse(booking)
+	bookingResponse := dto.NewBookingResponseFromEntity(booking)
 
 	// Create receipts directory if not exists
 	receiptsDir := "uploads/receipts"
@@ -354,59 +399,6 @@ func (s *BookingService) GenerateBookingReceipt(bookingID uint, userID *uint) (s
 	}
 
 	return outputPath, nil
-}
-
-// Helper method to map booking entity to response DTO
-func (s *BookingService) mapBookingToResponse(booking *entities.Booking) *dto.BookingResponse {
-	response := &dto.BookingResponse{
-		ID:        booking.ID,
-		Status:    booking.Status,
-		ExpiresAt: booking.ExpiresAt,
-		CreatedAt: booking.CreatedAt,
-	}
-
-	// Map schedule if loaded
-	if booking.Schedule.ID != 0 {
-		response.Schedule = &dto.ScheduleResponse{
-			ID:             booking.Schedule.ID,
-			Origin:         booking.Schedule.Route.OriginCity,
-			Destination:    booking.Schedule.Route.DestinationCity,
-			DepartureTime:  booking.Schedule.DepartureTime.Format("2006-01-02 15:04"),
-			ArrivalTime:    booking.Schedule.ArrivalTime.Format("2006-01-02 15:04"),
-			Price:          booking.Schedule.Price,
-			AvailableSeats: booking.Schedule.AvailableSeats,
-			Duration:       s.calculateDuration(booking.Schedule.DepartureTime, booking.Schedule.ArrivalTime),
-			CreatedAt:      &booking.Schedule.CreatedAt,
-			UpdatedAt:      &booking.Schedule.UpdatedAt,
-		}
-	}
-
-	// Map passengers (simplified from booking details)
-	response.Passengers = make([]dto.PassengerResponse, len(booking.BookingDetails))
-	var totalAmount float64
-	for i, detail := range booking.BookingDetails {
-		response.Passengers[i] = dto.PassengerResponse{
-			PassengerName: detail.PassengerName,
-		}
-
-		// Add seat number if seat is loaded
-		if detail.Seat.ID != 0 {
-			response.Passengers[i].SeatNumber = detail.Seat.SeatNumber
-		}
-
-		totalAmount += detail.Price
-	}
-	response.TotalAmount = totalAmount
-
-	return response
-}
-
-// Helper method to calculate duration between departure and arrival time
-func (s *BookingService) calculateDuration(departure, arrival time.Time) string {
-	duration := arrival.Sub(departure)
-	hours := int(duration.Hours())
-	minutes := int(duration.Minutes()) % 60
-	return fmt.Sprintf("%dh %dm", hours, minutes)
 }
 
 // saveUploadedFile saves multipart file to disk

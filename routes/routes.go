@@ -43,53 +43,76 @@ func SetupRoutes(router *gin.Engine, db *gorm.DB) {
 			auth.POST("/register", authController.Register)
 			auth.POST("/login", authController.Login)
 		}
-		// Public routes (no authentication needed)
+
 		protected := api.Group("/protected")
 		protected.Use(middleware.AuthMiddleware()) // Apply JWT middleware
-		protected.Use(middleware.RequireUser(db))
 		{
-			// Schedule routes for public access
-			protected.GET("/schedules/search", scheduleController.SearchSchedules)     // GET /api/public/schedules/search
-			protected.GET("/schedules/:id", scheduleController.GetScheduleByIDForUser) // GET /api/public/schedules/:id
-			protected.GET("/schedules/:id/seats", bookingController.GetAvailableSeats) // GET /api/protected/schedules/:id/seats			// Booking routes for authenticated users
-			bookings := protected.Group("/bookings")
+			// User routes (require authentication)
+			user := protected.Group("/user")
+			user.Use(middleware.RequireUser(db)) // Apply user role middleware
 			{
-				bookings.POST("", bookingController.CreateBooking)                  // POST /api/protected/bookings
-				bookings.GET("", bookingController.GetUserBookings)                 // GET /api/protected/bookings
-				bookings.GET("/:id", bookingController.GetBookingByID)              // GET /api/protected/bookings/:id
-				bookings.GET("/:id/receipt", bookingController.DownloadReceipt)     // GET /api/protected/bookings/:id/receipt
-				bookings.POST("/:id/payment", bookingController.UploadPaymentProof) // POST /api/protected/bookings/:id/payment
+				// Schedule routes for user access
+				user.GET("/schedules/search", scheduleController.SearchSchedules)
+				user.GET("/schedule/:id", scheduleController.GetScheduleByID)
+
+				// Booking routes for authenticated users
+				bookings := user.Group("/bookings")
+				{
+					bookings.GET("", bookingController.GetUserBookings)
+				}
+
+				booking := user.Group("/booking")
+				{
+					booking.POST("", bookingController.CreateBooking)
+					booking.GET("/:id", bookingController.GetBookingByID)
+					booking.GET("/:id/receipt", bookingController.DownloadReceipt)
+					booking.POST("/:id/payment", bookingController.UploadPaymentProof)
+				}
+			}
+
+			// Admin routes (require admin role)
+			admin := protected.Group("/admin")
+			admin.Use(middleware.RequireAdmin(db)) // Apply admin role middleware
+			{
+				adminRoutes := admin.Group("/routes")
+				{
+					adminRoutes.GET("", routeController.GetAllRoutes)
+				}
+
+				adminRoute := admin.Group("/route")
+				{
+					adminRoute.POST("", routeController.CreateRoute)
+					adminRoute.PUT("/:id", routeController.UpdateRoute)
+					adminRoute.DELETE("/:id", routeController.DeleteRoute)
+				}
+
+				adminSchedules := admin.Group("/schedules")
+				{
+					adminSchedules.GET("", scheduleController.GetAllSchedules)
+				}
+
+				adminSchedule := admin.Group("/schedule")
+				{
+					adminSchedule.POST("", scheduleController.CreateSchedule)
+					adminSchedule.GET("/:id", scheduleController.GetScheduleByID)
+					adminSchedule.PUT("/:id", scheduleController.UpdateSchedule)
+					adminSchedule.DELETE("/:id", scheduleController.DeleteSchedule)
+				}
+
+				// Admin booking routes
+				adminBookings := admin.Group("/bookings")
+				{
+					adminBookings.GET("", bookingController.GetAllBookings)
+				}
+
+				adminBooking := admin.Group("/booking")
+				{
+					adminBooking.GET("/:id", bookingController.GetBookingByID)
+					adminBooking.GET("/:id/payment/download", bookingController.DownloadPaymentProof)
+					adminBooking.PUT("/:id/status", bookingController.UpdateBookingStatus)
+				}
 			}
 		}
 
-		// Admin routes (require admin role)
-		admin := api.Group("/admin")
-		admin.Use(middleware.AuthMiddleware()) // Apply JWT middleware
-		admin.Use(middleware.RequireAdmin(db)) // Apply admin role middleware
-		{
-			adminRoutes := admin.Group("/routes")
-			{
-				adminRoutes.GET("", routeController.GetAllRoutes)       // GET /api/admin/routes
-				adminRoutes.POST("", routeController.CreateRoute)       // POST /api/admin/routes				adminRoutes.GET("/:id", routeController.GetRouteByID) // GET /api/admin/routes/:id
-				adminRoutes.PUT("/:id", routeController.UpdateRoute)    // PUT /api/admin/routes/:id
-				adminRoutes.DELETE("/:id", routeController.DeleteRoute) // DELETE /api/admin/routes/:id
-			}
-
-			adminSchedules := admin.Group("/schedules")
-			{
-				adminSchedules.GET("", scheduleController.GetAllSchedules)       // GET /api/admin/schedules
-				adminSchedules.POST("", scheduleController.CreateSchedule)       // POST /api/admin/schedules
-				adminSchedules.GET("/:id", scheduleController.GetScheduleByID)   // GET /api/admin/schedules/:id (untuk admin)
-				adminSchedules.PUT("/:id", scheduleController.UpdateSchedule)    // PUT /api/admin/schedules/:id
-				adminSchedules.DELETE("/:id", scheduleController.DeleteSchedule) // DELETE /api/admin/schedules/:id
-			} // Admin booking routes
-			adminBookings := admin.Group("/bookings")
-			{
-				adminBookings.GET("", bookingController.GetAllBookings)                            // GET /api/admin/bookings
-				adminBookings.GET("/:id", bookingController.GetBookingByID)                        // GET /api/admin/bookings/:id
-				adminBookings.GET("/:id/payment/download", bookingController.DownloadPaymentProof) // GET /api/admin/bookings/:id/payment/download
-				adminBookings.PUT("/:id/status", bookingController.UpdateBookingStatus)            // PUT /api/admin/bookings/:id/status
-			}
-		}
 	}
 }

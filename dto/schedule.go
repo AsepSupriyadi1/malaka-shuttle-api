@@ -48,13 +48,16 @@ type ScheduleResponse struct {
 	UpdatedAt      *time.Time `json:"updated_at,omitempty"` // Bisa null untuk user
 }
 
-// ScheduleListResponse - DTO untuk response list schedule dengan pagination
-type ScheduleListResponse struct {
-	Results    []ScheduleResponse `json:"results"`
-	Page       int                `json:"page"`
-	Limit      int                `json:"limit"`
-	TotalPages int                `json:"total_pages"`
-	TotalCount int64              `json:"total_count"`
+// ScheduleWithSeatsResponse - DTO untuk response schedule dengan detail kursi
+type ScheduleWithSeatsResponse struct {
+	ScheduleID     uint           `json:"schedule_id"`
+	Origin         string         `json:"origin"`
+	Destination    string         `json:"destination"`
+	DepartureTime  string         `json:"departure_time"` // Format: "YYYY-MM-DD HH:mm"
+	ArrivalTime    string         `json:"arrival_time"`   // Format: "YYYY-MM-DD HH:mm"
+	TotalSeats     int            `json:"total_seats"`
+	AvailableSeats int            `json:"available_seats"`
+	Seats          []SeatResponse `json:"seats"`
 }
 
 // ToScheduleResponse - Convert entity to response DTO
@@ -93,24 +96,48 @@ func ToScheduleResponse(schedule entities.Schedule, includeAdminFields bool) Sch
 		response.CreatedAt = &schedule.CreatedAt
 		response.UpdatedAt = &schedule.UpdatedAt
 	}
-
 	return response
 }
 
-// ToScheduleListResponse - Convert entity list to response DTO with pagination
-func ToScheduleListResponse(schedules []entities.Schedule, page, limit int, totalCount int64, includeAdminFields bool) ScheduleListResponse {
-	var scheduleResponses []ScheduleResponse
-	for _, schedule := range schedules {
-		scheduleResponses = append(scheduleResponses, ToScheduleResponse(schedule, includeAdminFields))
+// ToScheduleWithSeatsResponse - Convert schedule dan seats ke response DTO
+func ToScheduleWithSeatsResponse(schedule entities.Schedule, seats []entities.Seat) ScheduleWithSeatsResponse {
+	// Load timezone Indonesia (WIB)
+	loc, err := time.LoadLocation("Asia/Jakarta")
+	if err != nil {
+		loc = time.FixedZone("WIB", 7*60*60) // Fallback ke WIB +7
 	}
 
-	totalPages := int((totalCount + int64(limit) - 1) / int64(limit))
+	// Convert to WIB timezone and format to "YYYY-MM-DD HH:mm"
+	departureTimeWIB := schedule.DepartureTime.In(loc)
+	arrivalTimeWIB := schedule.ArrivalTime.In(loc)
 
-	return ScheduleListResponse{
-		Results:    scheduleResponses,
-		Page:       page,
-		Limit:      limit,
-		TotalPages: totalPages,
-		TotalCount: totalCount,
+	departureTimeStr := departureTimeWIB.Format("2006-01-02 15:04")
+	arrivalTimeStr := arrivalTimeWIB.Format("2006-01-02 15:04")
+
+	// Count available seats
+	var availableCount int
+	seatResponses := make([]SeatResponse, len(seats))
+
+	for i, seat := range seats {
+		seatResponses[i] = SeatResponse{
+			ID:         seat.ID,
+			SeatNumber: seat.SeatNumber,
+			IsBooked:   seat.IsBooked,
+		}
+
+		if !seat.IsBooked {
+			availableCount++
+		}
+	}
+
+	return ScheduleWithSeatsResponse{
+		ScheduleID:     schedule.ID,
+		Origin:         schedule.Route.OriginCity,
+		Destination:    schedule.Route.DestinationCity,
+		DepartureTime:  departureTimeStr,
+		ArrivalTime:    arrivalTimeStr,
+		TotalSeats:     len(seats),
+		AvailableSeats: availableCount,
+		Seats:          seatResponses,
 	}
 }

@@ -17,13 +17,11 @@ type PaginationParams struct {
 
 // PaginationResponse holds pagination response data
 type PaginationResponse struct {
-	Results     interface{} `json:"results"`
-	Total       int64       `json:"total"`
-	Page        int         `json:"page"`
-	Limit       int         `json:"limit"`
-	TotalPages  int         `json:"total_pages"`
-	HasNext     bool        `json:"has_next"`
-	HasPrevious bool        `json:"has_previous"`
+	Results    interface{} `json:"results"`
+	Total      int64       `json:"total"`
+	Page       int         `json:"page"`
+	Limit      int         `json:"limit"`
+	TotalPages int         `json:"total_pages"`
 }
 
 // GetPaginationParams extracts pagination parameters from query string
@@ -56,13 +54,11 @@ func GetPaginationParams(c *gin.Context) PaginationParams {
 func CreatePaginationResponse(data interface{}, total int64, params PaginationParams) PaginationResponse {
 	totalPages := int(math.Ceil(float64(total) / float64(params.Limit)))
 	return PaginationResponse{
-		Results:     data,
-		Total:       total,
-		Page:        params.Page,
-		Limit:       params.Limit,
-		TotalPages:  totalPages,
-		HasNext:     params.Page < totalPages,
-		HasPrevious: params.Page > 1,
+		Results:    data,
+		Total:      total,
+		Page:       params.Page,
+		Limit:      params.Limit,
+		TotalPages: totalPages,
 	}
 }
 
