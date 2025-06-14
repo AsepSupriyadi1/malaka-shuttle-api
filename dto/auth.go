@@ -1,5 +1,7 @@
 package dto
 
+import "malakashuttle/entities"
+
 // RegisterResponse response untuk register
 type (
 	RegisterRequest struct {
@@ -24,3 +26,22 @@ type (
 		Token string `json:"token"`
 	}
 )
+
+// NewRegisterResponseFromEntity creates RegisterResponse from User entity
+func NewRegisterResponseFromEntity(user *entities.User) *RegisterResponse {
+	return &RegisterResponse{
+		Email: user.Email,
+	}
+}
+
+// ToUserEntity converts RegisterRequest to User entity for creation
+func (r *RegisterRequest) ToUserEntity() *entities.User {
+	return &entities.User{
+		FirstName:   r.FirstName,
+		LastName:    r.LastName,
+		PhoneNumber: r.PhoneNumber,
+		Email:       r.Email,
+		Password:    r.Password,
+		Role:        "user", // Default role
+	}
+}
