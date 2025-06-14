@@ -45,10 +45,18 @@ func (s *BookingService) CreateBooking(userID uint, req dto.CreateBookingRequest
 		}
 		return nil, err
 	}
-
 	// Check if schedule is in the future
 	if schedule.DepartureTime.Before(time.Now()) {
 		return nil, errors.New("cannot book past schedule")
+	}
+
+	// Validate no duplicate seat IDs in the same booking
+	seatMap := make(map[uint]bool)
+	for _, passenger := range req.Passengers {
+		if seatMap[passenger.SeatID] {
+			return nil, errors.New("duplicate seat assignment: seat is already assigned to another passenger in this booking")
+		}
+		seatMap[passenger.SeatID] = true
 	}
 
 	// Validate all seat IDs belong to the route
@@ -59,19 +67,21 @@ func (s *BookingService) CreateBooking(userID uint, req dto.CreateBookingRequest
 
 	// Check if seats exist and belong to the route
 	// This would require a seat repository - for now, we'll assume seats are valid
+	// Calculate total amount based on number of passengers and ticket price
+	totalAmount := float64(len(req.Passengers)) * schedule.Price
 
 	// Create booking
 	booking := &entities.Booking{
-		UserID:      userID,
-		ScheduleID:  req.ScheduleID,
-		BookingTime: time.Now(),
-		Status:      entities.BookingStatusPending,
-		ExpiresAt:   time.Now().Add(30 * time.Minute), // 30 minutes expiry
+		UserID:        userID,
+		ScheduleID:    req.ScheduleID,
+		BookingTime:   time.Now(),
+		Status:        entities.BookingStatusPending,
+		ExpiresAt:     time.Now().Add(30 * time.Minute), // 30 minutes expiry
+		PaymentAmount: totalAmount,
 	}
 
 	// Create booking details
 	bookingDetails := make([]entities.BookingDetail, len(req.Passengers))
-	var totalAmount float64
 
 	for i, passenger := range req.Passengers {
 		bookingDetails[i] = entities.BookingDetail{
@@ -79,7 +89,6 @@ func (s *BookingService) CreateBooking(userID uint, req dto.CreateBookingRequest
 			PassengerName: passenger.PassengerName,
 			Price:         schedule.Price, // Assuming all seats have same price
 		}
-		totalAmount += schedule.Price
 	}
 
 	// Create booking in database

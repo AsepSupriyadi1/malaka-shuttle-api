@@ -19,11 +19,12 @@ const (
 
 type Booking struct {
 	gorm.Model
-	UserID      uint `gorm:"not null;index"`
-	ScheduleID  uint `gorm:"not null;index"`
-	BookingTime time.Time
-	Status      BookingStatus `gorm:"type:enum('pending','waiting_verification','success','rejected','expired','cancelled');default:'pending'"`
-	ExpiresAt   time.Time     `gorm:"not null"`
+	UserID        uint `gorm:"not null;index"`
+	ScheduleID    uint `gorm:"not null;index"`
+	BookingTime   time.Time
+	Status        BookingStatus `gorm:"type:enum('pending','waiting_verification','success','rejected','expired','cancelled');default:'pending'"`
+	ExpiresAt     time.Time     `gorm:"not null"`
+	PaymentAmount float64       `gorm:"type:decimal(10,2);not null;default:0"`
 
 	// Relations
 	User           User            `gorm:"foreignKey:UserID"`

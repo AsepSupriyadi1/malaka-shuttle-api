@@ -93,7 +93,6 @@ type BookingListResponse struct {
 	Destination    string                 `json:"destination"`
 	DepartureTime  string                 `json:"departure_time"`
 	ArrivalTime    string                 `json:"arrival_time"`
-	AvailableSeats int                    `json:"available_seats"`
 	Duration       string                 `json:"duration,omitempty"`
 	PassengerCount int                    `json:"passenger_count,omitempty"`
 	CreatedAt      time.Time              `json:"created_at"`
@@ -111,7 +110,6 @@ type BookingFullResponse struct {
 	ArrivalTime      string                    `json:"arrival_time"`
 	Duration         string                    `json:"duration"`
 	Price            float64                   `json:"price"`
-	AvailableSeats   int                       `json:"available_seats"`
 	PassengerDetails []PassengerDetailResponse `json:"passenger_details"`
 	PaymentInfo      *PaymentInfoResponse      `json:"payment_info,omitempty"`
 	CreatedAt        time.Time                 `json:"created_at"`
@@ -150,26 +148,22 @@ func (b *BookingResponse) FromEntity(booking *entities.Booking) {
 	b.Status = booking.Status
 	b.ExpiresAt = booking.ExpiresAt
 	b.CreatedAt = booking.CreatedAt
-
 	// Map schedule if loaded
 	if booking.Schedule.ID != 0 {
 		b.Schedule = &ScheduleResponse{
-			ID:             booking.Schedule.ID,
-			Origin:         booking.Schedule.Route.OriginCity,
-			Destination:    booking.Schedule.Route.DestinationCity,
-			DepartureTime:  booking.Schedule.DepartureTime.Format("2006-01-02 15:04"),
-			ArrivalTime:    booking.Schedule.ArrivalTime.Format("2006-01-02 15:04"),
-			Price:          booking.Schedule.Price,
-			AvailableSeats: booking.Schedule.AvailableSeats,
-			Duration:       calculateDuration(booking.Schedule.DepartureTime, booking.Schedule.ArrivalTime),
-			CreatedAt:      &booking.Schedule.CreatedAt,
-			UpdatedAt:      &booking.Schedule.UpdatedAt,
+			ID:            booking.Schedule.ID,
+			Origin:        booking.Schedule.Route.OriginCity,
+			Destination:   booking.Schedule.Route.DestinationCity,
+			DepartureTime: booking.Schedule.DepartureTime.Format("2006-01-02 15:04"),
+			ArrivalTime:   booking.Schedule.ArrivalTime.Format("2006-01-02 15:04"),
+			Price:         booking.Schedule.Price,
+			Duration:      calculateDuration(booking.Schedule.DepartureTime, booking.Schedule.ArrivalTime),
+			CreatedAt:     &booking.Schedule.CreatedAt,
+			UpdatedAt:     &booking.Schedule.UpdatedAt,
 		}
 	}
-
 	// Map passengers (simplified from booking details)
 	b.Passengers = make([]PassengerResponse, len(booking.BookingDetails))
-	var totalAmount float64
 	for i, detail := range booking.BookingDetails {
 		b.Passengers[i] = PassengerResponse{
 			PassengerName: detail.PassengerName,
@@ -179,10 +173,10 @@ func (b *BookingResponse) FromEntity(booking *entities.Booking) {
 		if detail.Seat.ID != 0 {
 			b.Passengers[i].SeatNumber = detail.Seat.SeatNumber
 		}
-
-		totalAmount += detail.Price
 	}
-	b.TotalAmount = totalAmount
+
+	// Use the pre-calculated payment amount from the booking entity
+	b.TotalAmount = booking.PaymentAmount
 }
 
 // NewBookingResponseFromEntity creates a new BookingResponse from a Booking entity
@@ -198,24 +192,17 @@ func (b *BookingListResponse) FromEntity(booking *entities.Booking) {
 	b.BookingStatus = booking.Status
 	b.ExpiresAt = booking.ExpiresAt.Format("2006-01-02 15:04")
 	b.CreatedAt = booking.CreatedAt
-
 	// Map schedule data directly into response fields
 	if booking.Schedule.ID != 0 {
 		b.Origin = booking.Schedule.Route.OriginCity
 		b.Destination = booking.Schedule.Route.DestinationCity
 		b.DepartureTime = booking.Schedule.DepartureTime.Format("2006-01-02 15:04")
 		b.ArrivalTime = booking.Schedule.ArrivalTime.Format("2006-01-02 15:04")
-		b.AvailableSeats = booking.Schedule.AvailableSeats
 		b.Duration = calculateDuration(booking.Schedule.DepartureTime, booking.Schedule.ArrivalTime)
 	}
-
-	// Calculate total amount and passenger count
-	var totalAmount float64
+	// Set passenger count and use pre-calculated payment amount
 	b.PassengerCount = len(booking.BookingDetails)
-	for _, detail := range booking.BookingDetails {
-		totalAmount += detail.Price
-	}
-	b.TotalAmount = totalAmount
+	b.TotalAmount = booking.PaymentAmount
 }
 
 // NewBookingListResponseFromEntity creates a new BookingListResponse from a Booking entity
@@ -232,7 +219,6 @@ func (b *BookingFullResponse) FromEntity(booking *entities.Booking) {
 	b.ExpiresAt = booking.ExpiresAt.Format("2006-01-02 15:04")
 	b.CreatedAt = booking.CreatedAt
 	b.UpdatedAt = booking.UpdatedAt
-
 	// Map schedule data directly into response fields
 	if booking.Schedule.ID != 0 {
 		b.Origin = booking.Schedule.Route.OriginCity
@@ -240,13 +226,10 @@ func (b *BookingFullResponse) FromEntity(booking *entities.Booking) {
 		b.DepartureTime = booking.Schedule.DepartureTime.Format("2006-01-02 15:04")
 		b.ArrivalTime = booking.Schedule.ArrivalTime.Format("2006-01-02 15:04")
 		b.Price = booking.Schedule.Price
-		b.AvailableSeats = booking.Schedule.AvailableSeats
 		b.Duration = calculateDuration(booking.Schedule.DepartureTime, booking.Schedule.ArrivalTime)
 	}
-
 	// Map passenger details with seat information
 	b.PassengerDetails = make([]PassengerDetailResponse, len(booking.BookingDetails))
-	var totalAmount float64
 	for i, detail := range booking.BookingDetails {
 		b.PassengerDetails[i] = PassengerDetailResponse{
 			PassengerName: detail.PassengerName,
@@ -257,10 +240,10 @@ func (b *BookingFullResponse) FromEntity(booking *entities.Booking) {
 		if detail.Seat.ID != 0 {
 			b.PassengerDetails[i].SeatNumber = detail.Seat.SeatNumber
 		}
-
-		totalAmount += detail.Price
 	}
-	b.TotalAmount = totalAmount
+
+	// Use pre-calculated payment amount from booking entity
+	b.TotalAmount = booking.PaymentAmount
 
 	// Map payment information if available
 	if booking.Payment != nil {

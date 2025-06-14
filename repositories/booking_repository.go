@@ -92,7 +92,6 @@ func (r *BookingRepository) GetBookingByID(id uint, userID *uint) (*entities.Boo
 	if userID != nil {
 		query = query.Where("user_id = ?", *userID)
 	}
-
 	err := query.First(&booking, id).Error
 	if err != nil {
 		return nil, err
@@ -116,7 +115,6 @@ func (r *BookingRepository) GetBookingsByUserID(userID uint, page, limit int, st
 	if err := query.Model(&entities.Booking{}).Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
-
 	// Get paginated data
 	offset := (page - 1) * limit
 	err := query.Preload("Schedule").
@@ -127,8 +125,11 @@ func (r *BookingRepository) GetBookingsByUserID(userID uint, page, limit int, st
 		Limit(limit).
 		Offset(offset).
 		Find(&bookings).Error
+	if err != nil {
+		return nil, 0, err
+	}
 
-	return bookings, total, err
+	return bookings, total, nil
 }
 
 // GetAllBookings retrieves all bookings (for staff)
@@ -145,8 +146,7 @@ func (r *BookingRepository) GetAllBookings(page, limit int, status []entities.Bo
 	// Count total
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
-	}
-	// Get paginated data
+	} // Get paginated data
 	offset := (page - 1) * limit
 	err := query.Preload("Schedule").
 		Preload("Schedule.Route").
@@ -157,8 +157,11 @@ func (r *BookingRepository) GetAllBookings(page, limit int, status []entities.Bo
 		Limit(limit).
 		Offset(offset).
 		Find(&bookings).Error
+	if err != nil {
+		return nil, 0, err
+	}
 
-	return bookings, total, err
+	return bookings, total, nil
 }
 
 // UpdateBookingStatus updates booking status
