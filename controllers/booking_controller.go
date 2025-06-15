@@ -31,8 +31,8 @@ func NewBookingController(bookingService *services.BookingService) *BookingContr
 
 // CreateBooking creates a new booking
 func (c *BookingController) CreateBooking(ctx *gin.Context) {
-	// Get user ID from JWT token
-	userID, exists := ctx.Get("user_id")
+	// Get user email from JWT token
+	userEmail, exists := ctx.Get("user_email")
 	if !exists {
 		utils.ErrorResponse(ctx, http.StatusUnauthorized, "User not authenticated", nil)
 		return
@@ -49,9 +49,8 @@ func (c *BookingController) CreateBooking(ctx *gin.Context) {
 		utils.ErrorResponse(ctx, http.StatusBadRequest, "Validation failed", err.Error())
 		return
 	}
-
 	// Create booking
-	booking, err := c.bookingService.CreateBooking(userID.(uint), req)
+	booking, err := c.bookingService.CreateBooking(userEmail.(string), req)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			utils.ErrorResponse(ctx, http.StatusNotFound, err.Error(), nil)
@@ -80,9 +79,8 @@ func (c *BookingController) GetBookingByID(ctx *gin.Context) {
 		utils.ErrorResponse(ctx, http.StatusBadRequest, "Invalid booking ID", nil)
 		return
 	}
-
-	// Get user ID from JWT token
-	userID, exists := ctx.Get("user_id")
+	// Get user email from JWT token
+	userEmail, exists := ctx.Get("user_email")
 	if !exists {
 		utils.ErrorResponse(ctx, http.StatusUnauthorized, "User not authenticated", nil)
 		return
@@ -90,13 +88,13 @@ func (c *BookingController) GetBookingByID(ctx *gin.Context) {
 
 	// Check if user is staff (can view all bookings) or regular user (can only view own bookings)
 	userRole, _ := ctx.Get("user_role")
-	var userIDPtr *uint
+	var userEmailPtr *string
 	if userRole != "staff" && userRole != "admin" {
-		uid := userID.(uint)
-		userIDPtr = &uid
+		email := userEmail.(string)
+		userEmailPtr = &email
 	}
 
-	booking, err := c.bookingService.GetBookingDetailByID(uint(bookingID), userIDPtr)
+	booking, err := c.bookingService.GetBookingDetailByID(uint(bookingID), userEmailPtr)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			utils.ErrorResponse(ctx, http.StatusNotFound, err.Error(), nil)
@@ -111,8 +109,8 @@ func (c *BookingController) GetBookingByID(ctx *gin.Context) {
 
 // GetUserBookings gets all bookings for the authenticated user
 func (c *BookingController) GetUserBookings(ctx *gin.Context) {
-	// Get user ID from JWT token
-	userID, exists := ctx.Get("user_id")
+	// Get user email from JWT token
+	userEmail, exists := ctx.Get("user_email")
 	if !exists {
 		utils.ErrorResponse(ctx, http.StatusUnauthorized, "User not authenticated", nil)
 		return
@@ -131,7 +129,7 @@ func (c *BookingController) GetUserBookings(ctx *gin.Context) {
 		}
 	}
 
-	bookings, err := c.bookingService.GetUserBookingsList(userID.(uint), params, statusFilter)
+	bookings, err := c.bookingService.GetUserBookingsList(userEmail.(string), params, statusFilter)
 	if err != nil {
 		utils.ErrorResponse(ctx, http.StatusInternalServerError, "Failed to get bookings", err.Error())
 		return
@@ -173,8 +171,8 @@ func (c *BookingController) UploadPaymentProof(ctx *gin.Context) {
 		return
 	}
 
-	// Get user ID from JWT token
-	userID, exists := ctx.Get("user_id")
+	// Get user email from JWT token
+	userEmail, exists := ctx.Get("user_email")
 	if !exists {
 		utils.ErrorResponse(ctx, http.StatusUnauthorized, "User not authenticated", nil)
 		return
@@ -216,7 +214,7 @@ func (c *BookingController) UploadPaymentProof(ctx *gin.Context) {
 	}
 
 	// Upload payment proof
-	err = c.bookingService.UploadPaymentProof(uint(bookingID), userID.(uint), file, paymentMethod)
+	err = c.bookingService.UploadPaymentProof(uint(bookingID), userEmail.(string), file, paymentMethod)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") || strings.Contains(err.Error(), "not eligible") {
 			utils.ErrorResponse(ctx, http.StatusNotFound, err.Error(), nil)
@@ -360,9 +358,8 @@ func (c *BookingController) DownloadReceipt(ctx *gin.Context) {
 		utils.ErrorResponse(ctx, http.StatusBadRequest, "Invalid booking ID", nil)
 		return
 	}
-
-	// Get user ID from JWT token
-	userID, exists := ctx.Get("user_id")
+	// Get user email from JWT token
+	userEmail, exists := ctx.Get("user_email")
 	if !exists {
 		utils.ErrorResponse(ctx, http.StatusUnauthorized, "User not authenticated", nil)
 		return
@@ -370,14 +367,14 @@ func (c *BookingController) DownloadReceipt(ctx *gin.Context) {
 
 	// Check if user is staff (can access any receipt) or regular user (can only access own receipt)
 	userRole, _ := ctx.Get("user_role")
-	var userIDPtr *uint
+	var userEmailPtr *string
 	if userRole != "staff" && userRole != "admin" {
-		uid := userID.(uint)
-		userIDPtr = &uid
+		email := userEmail.(string)
+		userEmailPtr = &email
 	}
 
 	// Generate receipt
-	receiptPath, err := c.bookingService.GenerateBookingReceipt(uint(bookingID), userIDPtr)
+	receiptPath, err := c.bookingService.GenerateBookingReceipt(uint(bookingID), userEmailPtr)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			utils.ErrorResponse(ctx, http.StatusNotFound, err.Error(), nil)

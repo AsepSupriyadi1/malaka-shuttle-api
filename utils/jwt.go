@@ -7,11 +7,21 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-func GenerateToken(userID uint) (string, error) {
-	claims := jwt.MapClaims{
-		"user_id": userID,
-		"exp":     time.Now().Add(config.GetJWTDuration()).Unix(),
-		"iat":     time.Now().Unix(),
+// JWTClaims represents the JWT claims structure
+type JWTClaims struct {
+	Email string `json:"email"`
+	Role  string `json:"role"`
+	jwt.RegisteredClaims
+}
+
+func GenerateToken(email, role string) (string, error) {
+	claims := JWTClaims{
+		Email: email,
+		Role:  role,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(config.GetJWTDuration())),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+		},
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
@@ -22,15 +32,18 @@ func GenerateToken(userID uint) (string, error) {
 	return signedToken, nil
 }
 
-func ValidateToken(tokenString string) (uint, error) {
-	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+func ValidateToken(tokenString string) (*JWTClaims, error) {
+	token, err := jwt.ParseWithClaims(tokenString, &JWTClaims{}, func(token *jwt.Token) (interface{}, error) {
 		return config.GetJWTSecret(), nil
 	})
 
-	if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
-		userId := uint(claims["user_id"].(float64))
-		return userId, nil
+	if err != nil {
+		return nil, err
 	}
 
-	return 0, err
+	if claims, ok := token.Claims.(*JWTClaims); ok && token.Valid {
+		return claims, nil
+	}
+
+	return nil, err
 }

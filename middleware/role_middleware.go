@@ -1,7 +1,6 @@
 package middleware
 
 import (
-	"malakashuttle/repositories"
 	"malakashuttle/utils"
 
 	"github.com/gin-gonic/gin"
@@ -9,10 +8,10 @@ import (
 )
 
 // RequireRole creates a middleware that checks if the user has the required role
-func RequireRole(db *gorm.DB, requiredRole string) gin.HandlerFunc {
+func RequireRole(requiredRole string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// Get user_id from context (set by AuthMiddleware)
-		userID, exists := c.Get("user_id")
+		// Get user_role from context (set by AuthMiddleware)
+		userRole, exists := c.Get("user_role")
 		if !exists {
 			err := utils.NewUnauthorizedError("User not authenticated", nil)
 			utils.Response.BuildErrorResponse(c, err)
@@ -20,31 +19,16 @@ func RequireRole(db *gorm.DB, requiredRole string) gin.HandlerFunc {
 			return
 		}
 
-		// Get user from database to check role
-		userRepo := repositories.NewUserRepository(db)
-		user, err := userRepo.FindByID(userID.(uint))
-		if err != nil {
-			notFoundErr := utils.NewNotFoundErrorWithDetails(
-				"User not found",
-				err,
-				map[string]interface{}{
-					"user_id": userID,
-				},
-			)
-			utils.Response.BuildErrorResponse(c, notFoundErr)
-			c.Abort()
-			return
-		}
-
 		// Check if user has the required role
-		if user.Role != requiredRole {
+		if userRole.(string) != requiredRole {
+			userEmail, _ := c.Get("user_email")
 			forbiddenErr := utils.NewForbiddenErrorWithDetails(
 				"Insufficient permissions",
 				nil,
 				map[string]interface{}{
 					"required_role": requiredRole,
-					"user_role":     user.Role,
-					"user_id":       userID,
+					"user_role":     userRole,
+					"user_email":    userEmail,
 				},
 			)
 			utils.Response.BuildErrorResponse(c, forbiddenErr)
@@ -52,21 +36,19 @@ func RequireRole(db *gorm.DB, requiredRole string) gin.HandlerFunc {
 			return
 		}
 
-		// Set user role in context for later use
-		c.Set("user_role", user.Role)
 		c.Next()
 	}
 }
 
 // RequireAdmin is a convenience function for admin role requirement
 func RequireAdmin(db *gorm.DB) gin.HandlerFunc {
-	return RequireRole(db, "admin")
+	return RequireRole("admin")
 }
 
 func RequireUser(db *gorm.DB) gin.HandlerFunc {
-	return RequireRole(db, "user")
+	return RequireRole("user")
 }
 
 func RequireStaff(db *gorm.DB) gin.HandlerFunc {
-	return RequireRole(db, "staff")
+	return RequireRole("staff")
 }

@@ -59,9 +59,8 @@ func (s *authService) Login(req dto.LoginRequest) (*dto.LoginResponse, error) {
 	if err := userEntity.CheckPassword(req.Password); err != nil {
 		return nil, utils.NewUnauthorizedError("Invalid email or password", nil)
 	}
-
 	// Generate token
-	token, err := utils.GenerateToken(userEntity.ID)
+	token, err := utils.GenerateToken(userEntity.Email, userEntity.Role)
 	if err != nil {
 		return nil, utils.NewInternalServerError("Failed to generate token", err)
 	}

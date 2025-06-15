@@ -36,7 +36,13 @@ func NewBookingService(
 }
 
 // CreateBooking creates a new booking
-func (s *BookingService) CreateBooking(userID uint, req dto.CreateBookingRequest) (*dto.BookingResponse, error) {
+func (s *BookingService) CreateBooking(userEmail string, req dto.CreateBookingRequest) (*dto.BookingResponse, error) {
+	// Get user by email first
+	user, err := s.userRepo.FindByEmail(userEmail)
+	if err != nil {
+		return nil, errors.New("user not found")
+	}
+
 	// Validate schedule exists and is available
 	schedule, err := s.scheduleRepo.GetScheduleByID(req.ScheduleID)
 	if err != nil {
@@ -69,10 +75,9 @@ func (s *BookingService) CreateBooking(userID uint, req dto.CreateBookingRequest
 	// This would require a seat repository - for now, we'll assume seats are valid
 	// Calculate total amount based on number of passengers and ticket price
 	totalAmount := float64(len(req.Passengers)) * schedule.Price
-
 	// Create booking
 	booking := &entities.Booking{
-		UserID:        userID,
+		UserID:        user.ID,
 		ScheduleID:    req.ScheduleID,
 		BookingTime:   time.Now(),
 		Status:        entities.BookingStatusPending,
@@ -95,9 +100,8 @@ func (s *BookingService) CreateBooking(userID uint, req dto.CreateBookingRequest
 	err = s.bookingRepo.CreateBooking(booking, bookingDetails)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create booking: %w", err)
-	}
-	// Get created booking with relations
-	createdBooking, err := s.bookingRepo.GetBookingByID(booking.ID, &userID)
+	} // Get created booking with relations
+	createdBooking, err := s.bookingRepo.GetBookingByID(booking.ID, &user.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -106,8 +110,18 @@ func (s *BookingService) CreateBooking(userID uint, req dto.CreateBookingRequest
 }
 
 // GetBookingByID gets booking by ID
-func (s *BookingService) GetBookingByID(id uint, userID *uint) (*dto.BookingResponse, error) {
-	booking, err := s.bookingRepo.GetBookingByID(id, userID)
+func (s *BookingService) GetBookingByID(id uint, userEmail *string) (*dto.BookingResponse, error) {
+	var userIDPtr *uint
+	if userEmail != nil {
+		// Get user by email first
+		user, err := s.userRepo.FindByEmail(*userEmail)
+		if err != nil {
+			return nil, errors.New("user not found")
+		}
+		userIDPtr = &user.ID
+	}
+
+	booking, err := s.bookingRepo.GetBookingByID(id, userIDPtr)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, errors.New("booking not found")
@@ -119,8 +133,18 @@ func (s *BookingService) GetBookingByID(id uint, userID *uint) (*dto.BookingResp
 }
 
 // GetBookingDetailByID gets detailed booking by ID
-func (s *BookingService) GetBookingDetailByID(id uint, userID *uint) (*dto.BookingFullResponse, error) {
-	booking, err := s.bookingRepo.GetBookingByID(id, userID)
+func (s *BookingService) GetBookingDetailByID(id uint, userEmail *string) (*dto.BookingFullResponse, error) {
+	var userIDPtr *uint
+	if userEmail != nil {
+		// Get user by email first
+		user, err := s.userRepo.FindByEmail(*userEmail)
+		if err != nil {
+			return nil, errors.New("user not found")
+		}
+		userIDPtr = &user.ID
+	}
+
+	booking, err := s.bookingRepo.GetBookingByID(id, userIDPtr)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, errors.New("booking not found")
@@ -132,8 +156,15 @@ func (s *BookingService) GetBookingDetailByID(id uint, userID *uint) (*dto.Booki
 }
 
 // GetUserBookings gets all bookings for a user
-func (s *BookingService) GetUserBookings(userID uint, params utils.PaginationParams, status []entities.BookingStatus) (*utils.PaginationResponse, error) {
-	bookings, total, err := s.bookingRepo.GetBookingsByUserID(userID, params.Page, params.Limit, status)
+// GetUserBookings gets all bookings for a user
+func (s *BookingService) GetUserBookings(userEmail string, params utils.PaginationParams, status []entities.BookingStatus) (*utils.PaginationResponse, error) {
+	// Get user by email first
+	user, err := s.userRepo.FindByEmail(userEmail)
+	if err != nil {
+		return nil, errors.New("user not found")
+	}
+
+	bookings, total, err := s.bookingRepo.GetBookingsByUserID(user.ID, params.Page, params.Limit, status)
 	if err != nil {
 		return nil, err
 	}
@@ -149,8 +180,14 @@ func (s *BookingService) GetUserBookings(userID uint, params utils.PaginationPar
 }
 
 // GetUserBookingsList gets all bookings for a user with list view response format
-func (s *BookingService) GetUserBookingsList(userID uint, params utils.PaginationParams, status []entities.BookingStatus) (*utils.PaginationResponse, error) {
-	bookings, total, err := s.bookingRepo.GetBookingsByUserID(userID, params.Page, params.Limit, status)
+func (s *BookingService) GetUserBookingsList(userEmail string, params utils.PaginationParams, status []entities.BookingStatus) (*utils.PaginationResponse, error) {
+	// Get user by email first
+	user, err := s.userRepo.FindByEmail(userEmail)
+	if err != nil {
+		return nil, errors.New("user not found")
+	}
+
+	bookings, total, err := s.bookingRepo.GetBookingsByUserID(user.ID, params.Page, params.Limit, status)
 	if err != nil {
 		return nil, err
 	}
@@ -200,9 +237,15 @@ func (s *BookingService) GetAllBookingsList(params utils.PaginationParams, statu
 }
 
 // UploadPaymentProof uploads payment proof
-func (s *BookingService) UploadPaymentProof(bookingID uint, userID uint, file *multipart.FileHeader, paymentMethod string) error {
+func (s *BookingService) UploadPaymentProof(bookingID uint, userEmail string, file *multipart.FileHeader, paymentMethod string) error {
+	// Get user by email first
+	user, err := s.userRepo.FindByEmail(userEmail)
+	if err != nil {
+		return errors.New("user not found")
+	}
+
 	// Check if booking exists and belongs to user
-	booking, err := s.bookingRepo.GetBookingForPayment(bookingID, userID)
+	booking, err := s.bookingRepo.GetBookingForPayment(bookingID, user.ID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return errors.New("booking not found or not eligible for payment")
@@ -373,9 +416,19 @@ func (s *BookingService) GetPaymentByBookingID(bookingID uint) (*dto.PaymentResp
 }
 
 // GenerateBookingReceipt generates PDF receipt for a booking
-func (s *BookingService) GenerateBookingReceipt(bookingID uint, userID *uint) (string, error) {
+func (s *BookingService) GenerateBookingReceipt(bookingID uint, userEmail *string) (string, error) {
+	var userIDPtr *uint
+	if userEmail != nil {
+		// Get user by email first
+		user, err := s.userRepo.FindByEmail(*userEmail)
+		if err != nil {
+			return "", errors.New("user not found")
+		}
+		userIDPtr = &user.ID
+	}
+
 	// Get booking details
-	booking, err := s.bookingRepo.GetBookingByID(bookingID, userID)
+	booking, err := s.bookingRepo.GetBookingByID(bookingID, userIDPtr)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return "", errors.New("booking not found")

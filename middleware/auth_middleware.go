@@ -39,9 +39,8 @@ func AuthMiddleware() gin.HandlerFunc {
 			c.Abort()
 			return
 		}
-
 		// Validasi token
-		userId, err := utils.ValidateToken(parts[1])
+		claims, err := utils.ValidateToken(parts[1])
 
 		if err != nil {
 			tokenErr := utils.NewUnauthorizedErrorWithDetails(
@@ -56,7 +55,8 @@ func AuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		c.Set("user_id", userId)
+		c.Set("user_email", claims.Email)
+		c.Set("user_role", claims.Role)
 		c.Next()
 	}
 }
