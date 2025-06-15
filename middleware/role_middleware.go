@@ -4,7 +4,6 @@ import (
 	"malakashuttle/utils"
 
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
 )
 
 // RequireRole creates a middleware that checks if the user has the required role
@@ -38,17 +37,4 @@ func RequireRole(requiredRole string) gin.HandlerFunc {
 
 		c.Next()
 	}
-}
-
-// RequireAdmin is a convenience function for admin role requirement
-func RequireAdmin(db *gorm.DB) gin.HandlerFunc {
-	return RequireRole("admin")
-}
-
-func RequireUser(db *gorm.DB) gin.HandlerFunc {
-	return RequireRole("user")
-}
-
-func RequireStaff(db *gorm.DB) gin.HandlerFunc {
-	return RequireRole("staff")
 }
