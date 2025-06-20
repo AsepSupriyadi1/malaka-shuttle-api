@@ -5,7 +5,7 @@ import (
 	"log"
 	"malakashuttle/config"
 	"malakashuttle/middleware"
-	"malakashuttle/routes"
+	myRouter "malakashuttle/router"
 	"os"
 
 	"github.com/gin-gonic/gin"
@@ -38,7 +38,7 @@ func main() {
 
 	// Add global middleware
 	router.Use(middleware.RequestIDMiddleware()) // Add request ID to all requests
-	routes.InitRoutes(router, db)
+	myRouter.InitRoutes(router, db)
 
 	logger.Info("Server starting on port 8080")
 	router.Run(fmt.Sprintf(":%s", os.Getenv("PORT")))

@@ -1,9 +1,10 @@
-package routes
+package router
 
 import (
 	"malakashuttle/controllers"
 	"malakashuttle/middleware"
 	"malakashuttle/repositories"
+	"malakashuttle/routes"
 	"malakashuttle/services"
 
 	"github.com/gin-gonic/gin"
@@ -30,15 +31,20 @@ func InitRoutes(r *gin.Engine, db *gorm.DB) {
 	bookingController := controllers.NewBookingController(bookingService)
 	testController := controllers.NewTestController()
 
+	// feedback: Ini ntr ganti jadi pake cron job
 	bookingScheduler := services.NewBookingScheduler(bookingService)
 	bookingScheduler.Start()
 
 	// Apply logging middleware to all API routes
+	r.Use(middleware.LoggerMiddleware(), middleware.RequestIDMiddleware())
+
+	// Menginisialisasi grup router untuk API
 	router := r.Group("/api")
-	router.GET("/ping", testController.Ping)
-	router.Use(middleware.LoggerMiddleware())
-	AuthRoutes(router, authController)
-	BookingRoutes(router, bookingController)
-	RouteRoutes(router, routeController)
-	ScheduleRoutes(router, scheduleController)
+
+	// Inisialisasi routes
+	routes.TestRoutes(router, testController)
+	routes.AuthRoutes(router, authController)
+	routes.BookingRoutes(router, bookingController)
+	routes.RouteRoutes(router, routeController)
+	routes.ScheduleRoutes(router, scheduleController)
 }
