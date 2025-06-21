@@ -64,15 +64,17 @@ func (s *BookingService) CreateBooking(userEmail string, req dto.CreateBookingRe
 		}
 		seatMap[passenger.SeatID] = true
 	}
-
-	// Validate all seat IDs belong to the route
+	// Validate all seat IDs belong to the schedule
 	seatIDs := make([]uint, len(req.Passengers))
 	for i, passenger := range req.Passengers {
 		seatIDs[i] = passenger.SeatID
 	}
 
-	// Check if seats exist and belong to the route
-	// This would require a seat repository - for now, we'll assume seats are valid
+	// Check if seats exist and belong to the schedule
+	err = s.bookingRepo.ValidateSeatsForSchedule(seatIDs, req.ScheduleID)
+	if err != nil {
+		return nil, err
+	}
 	// Calculate total amount based on number of passengers and ticket price
 	totalAmount := float64(len(req.Passengers)) * schedule.Price
 	// Create booking
@@ -126,7 +128,8 @@ func (s *BookingService) GetBookingByID(id uint, userEmail *string) (*dto.Bookin
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, errors.New("booking not found")
 		}
-		return nil, err
+		// Handle other database errors gracefully
+		return nil, errors.New("failed to retrieve booking")
 	}
 
 	return dto.NewBookingResponseFromEntity(booking), nil
@@ -143,13 +146,13 @@ func (s *BookingService) GetBookingDetailByID(id uint, userEmail *string) (*dto.
 		}
 		userIDPtr = &user.ID
 	}
-
 	booking, err := s.bookingRepo.GetBookingByID(id, userIDPtr)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, errors.New("booking not found")
 		}
-		return nil, err
+		// Handle other database errors gracefully
+		return nil, errors.New("failed to retrieve booking")
 	}
 
 	return dto.NewBookingFullResponseFromEntity(booking), nil
@@ -243,25 +246,25 @@ func (s *BookingService) UploadPaymentProof(bookingID uint, userEmail string, fi
 	if err != nil {
 		return errors.New("user not found")
 	}
-
 	// Check if booking exists and belongs to user
 	booking, err := s.bookingRepo.GetBookingForPayment(bookingID, user.ID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return errors.New("booking not found or not eligible for payment")
 		}
-		return err
+		// Handle other database errors gracefully
+		return errors.New("failed to retrieve booking")
 	}
 
 	// Check if booking is not expired
 	if booking.ExpiresAt.Before(time.Now()) {
 		return errors.New("booking has expired")
 	}
-
 	// Check if payment already exists
 	existingPayment, err := s.bookingRepo.GetPaymentByBookingID(bookingID)
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
-		return err
+		// Handle database errors gracefully
+		return errors.New("failed to check existing payment")
 	}
 	if existingPayment != nil {
 		return errors.New("payment proof already uploaded")

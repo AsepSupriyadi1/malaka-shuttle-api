@@ -27,8 +27,20 @@ func (r *BookingRepository) CreateBooking(booking *entities.Booking, bookingDeta
 			seatIDs[i] = detail.SeatID
 		}
 
+		// CRITICAL: Validate that all seats belong to this schedule
+		var seatCount int64
+		err := tx.Model(&entities.Seat{}).
+			Where("id IN ? AND schedule_id = ?", seatIDs, booking.ScheduleID).
+			Count(&seatCount).Error
+		if err != nil {
+			return errors.New("failed to validate seats")
+		}
+		if int(seatCount) != len(seatIDs) {
+			return errors.New("one or more seats do not belong to the specified schedule")
+		}
+
 		// Check for active booking details (not deleted) that conflict
-		err := tx.Joins("JOIN bookings ON booking_details.booking_id = bookings.id").
+		err = tx.Joins("JOIN bookings ON booking_details.booking_id = bookings.id").
 			Where("booking_details.seat_id IN ? AND bookings.schedule_id = ? AND bookings.status NOT IN ? AND booking_details.deleted_at IS NULL",
 				seatIDs, booking.ScheduleID, []entities.BookingStatus{
 					entities.BookingStatusExpired,
@@ -45,9 +57,9 @@ func (r *BookingRepository) CreateBooking(booking *entities.Booking, bookingDeta
 			return errors.New("one or more seats are already booked")
 		}
 
-		// Double check seat availability
+		// Double check seat availability - only check seats that belong to this schedule
 		var bookedSeats []entities.Seat
-		err = tx.Where("id IN ? AND is_booked = ?", seatIDs, true).Find(&bookedSeats).Error
+		err = tx.Where("id IN ? AND schedule_id = ? AND is_booked = ?", seatIDs, booking.ScheduleID, true).Find(&bookedSeats).Error
 		if err != nil {
 			return err
 		}
@@ -69,9 +81,8 @@ func (r *BookingRepository) CreateBooking(booking *entities.Booking, bookingDeta
 		if err := tx.Create(&bookingDetails).Error; err != nil {
 			return err
 		}
-
-		// Update seat status to booked
-		if err := tx.Model(&entities.Seat{}).Where("id IN ?", seatIDs).Update("is_booked", true).Error; err != nil {
+		// Update seat status to booked - only update seats that belong to this schedule
+		if err := tx.Model(&entities.Seat{}).Where("id IN ? AND schedule_id = ?", seatIDs, booking.ScheduleID).Update("is_booked", true).Error; err != nil {
 			return err
 		}
 
@@ -294,4 +305,26 @@ func (r *BookingRepository) FreeSeatsByBookingID(bookingID uint) error {
 
 		return nil
 	})
+}
+
+// ValidateSeatsForSchedule validates that all seat IDs belong to the specified schedule
+func (r *BookingRepository) ValidateSeatsForSchedule(seatIDs []uint, scheduleID uint) error {
+	if len(seatIDs) == 0 {
+		return errors.New("no seats provided")
+	}
+
+	var count int64
+	err := r.db.Model(&entities.Seat{}).
+		Where("id IN ? AND schedule_id = ?", seatIDs, scheduleID).
+		Count(&count).Error
+
+	if err != nil {
+		return errors.New("failed to validate seats")
+	}
+
+	if int(count) != len(seatIDs) {
+		return errors.New("one or more seats do not belong to the specified schedule")
+	}
+
+	return nil
 }
