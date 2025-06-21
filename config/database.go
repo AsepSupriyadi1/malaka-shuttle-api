@@ -14,6 +14,9 @@ import (
 )
 
 func ConnectDatabase() *gorm.DB {
+	var db *gorm.DB
+	var err error
+
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local",
 		os.Getenv("DB_USER"),
 		os.Getenv("DB_PASSWORD"),
@@ -22,10 +25,20 @@ func ConnectDatabase() *gorm.DB {
 		os.Getenv("DB_NAME"),
 	)
 
-	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{})
+	maxAttempts := 10
+	for i := 1; i <= maxAttempts; i++ {
+		db, err = gorm.Open(mysql.Open(dsn), &gorm.Config{})
+		if err == nil {
+			log.Println("✅ Connected to database!")
+			break
+		}
+
+		log.Printf("⏳ Attempt %d: failed to connect to DB. Retrying in 3 seconds... Error: %v", i, err)
+		time.Sleep(3 * time.Second)
+	}
 
 	if err != nil {
-		panic("Failed to connect to database")
+		log.Fatalf("❌ Could not connect to DB after %d attempts. Error: %v", maxAttempts, err)
 	}
 
 	return db
