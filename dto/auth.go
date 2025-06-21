@@ -42,6 +42,6 @@ func (r *RegisterRequest) ToUserEntity() *entities.User {
 		PhoneNumber: r.PhoneNumber,
 		Email:       r.Email,
 		Password:    r.Password,
-		Role:        "user", // Default role
+		Role:        "user",
 	}
 }

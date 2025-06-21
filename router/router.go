@@ -2,6 +2,7 @@ package router
 
 import (
 	"malakashuttle/controllers"
+	"malakashuttle/cron"
 	"malakashuttle/middleware"
 	"malakashuttle/repositories"
 	"malakashuttle/routes"
@@ -20,19 +21,21 @@ func InitRoutes(r *gin.Engine, db *gorm.DB) {
 
 	// Initialize services
 	authService := services.NewAuthService(userRepo)
+	userService := services.NewUserService(userRepo)
 	routeService := services.NewRouteService(routeRepo)
 	scheduleService := services.NewScheduleService(scheduleRepo)
 	bookingService := services.NewBookingService(bookingRepo, scheduleRepo, userRepo)
 
 	// Initialize controllers
 	authController := controllers.NewAuthController(authService)
+	userController := controllers.NewUserController(userService)
 	routeController := controllers.NewRouteController(routeService)
 	scheduleController := controllers.NewScheduleController(scheduleService)
 	bookingController := controllers.NewBookingController(bookingService)
 	testController := controllers.NewTestController()
 
 	// feedback: Ini ntr ganti jadi pake cron job
-	bookingScheduler := services.NewBookingScheduler(bookingService)
+	bookingScheduler := cron.NewBookingScheduler(bookingService)
 	bookingScheduler.Start()
 
 	// Apply logging middleware to all API routes
@@ -44,6 +47,7 @@ func InitRoutes(r *gin.Engine, db *gorm.DB) {
 	// Inisialisasi routes
 	routes.TestRoutes(router, testController)
 	routes.AuthRoutes(router, authController)
+	routes.UserRoutes(router, userController)
 	routes.BookingRoutes(router, bookingController)
 	routes.RouteRoutes(router, routeController)
 	routes.ScheduleRoutes(router, scheduleController)

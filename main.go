@@ -24,14 +24,9 @@ func main() {
 
 	db := config.ConnectDatabase()
 
-	err = config.AutoMigrate(db)
+	err = config.ResetDatabase(db)
 	if err != nil {
-		log.Fatal("Error running auto migration: ", err)
-	}
-	// Create additional indexes for better performance
-	err = config.CreateIndexes(db)
-	if err != nil {
-		log.Println("Warning: Error creating indexes: ", err)
+		log.Fatal("Error resetting database: ", err)
 	}
 
 	router := gin.New()

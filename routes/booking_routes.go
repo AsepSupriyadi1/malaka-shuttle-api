@@ -25,4 +25,12 @@ func BookingRoutes(r *gin.RouterGroup, h *controllers.BookingController) {
 	adminRoutes.GET("/:id", h.GetBookingByID)
 	adminRoutes.GET("/:id/payment/download", h.DownloadPaymentProof)
 	adminRoutes.PUT("/:id/status", h.UpdateBookingStatus)
+
+	// Staff booking routes
+	staffRoutes := r.Group("/staff/bookings")
+	staffRoutes.Use(middleware.AuthMiddleware(), middleware.RequireRole(constants.ROLE_STAFF))
+	staffRoutes.GET("", h.GetAllBookings)
+	staffRoutes.GET("/:id", h.GetBookingByID)
+	staffRoutes.GET("/:id/payment/download", h.DownloadPaymentProof)
+	staffRoutes.PUT("/:id/status", h.UpdateBookingStatus)
 }
